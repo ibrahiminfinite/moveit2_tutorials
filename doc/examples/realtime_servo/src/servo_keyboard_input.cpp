@@ -67,8 +67,8 @@
 #define KEYCODE_R 0x72
 
 // Some constants used in the Servo Teleop demo
-const std::string TWIST_TOPIC = "/servo_node/delta_twist_cmds";
-const std::string JOINT_TOPIC = "/servo_node/delta_joint_cmds";
+const std::string TWIST_TOPIC = "/moveit_servo/delta_twist_cmds";
+const std::string JOINT_TOPIC = "/moveit_servo/delta_joint_cmds";
 const size_t ROS_QUEUE_SIZE = 10;
 const std::string EEF_FRAME_ID = "panda_hand";
 const std::string BASE_FRAME_ID = "panda_link0";
@@ -200,37 +200,44 @@ int KeyboardServo::keyLoop()
     auto twist_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
     auto joint_msg = std::make_unique<control_msgs::msg::JointJog>();
 
+    joint_msg->joint_names.resize(7);
+    joint_msg->joint_names = { "panda_joint1", "panda_joint2", "panda_joint3",
+    "panda_joint4", "panda_joint5", "panda_joint6",
+    "panda_joint7"};
+
+    joint_msg->velocities.resize(7);
+    std::fill(joint_msg->velocities.begin(), joint_msg->velocities.end(), 0.0);
     // Use read key-press
     switch (c)
     {
       case KEYCODE_LEFT:
         RCLCPP_DEBUG(nh_->get_logger(), "LEFT");
-        twist_msg->twist.linear.y = -1.0;
+        twist_msg->twist.linear.y = -0.1;
         publish_twist = true;
         break;
       case KEYCODE_RIGHT:
         RCLCPP_DEBUG(nh_->get_logger(), "RIGHT");
-        twist_msg->twist.linear.y = 1.0;
+        twist_msg->twist.linear.y = 0.1;
         publish_twist = true;
         break;
       case KEYCODE_UP:
         RCLCPP_DEBUG(nh_->get_logger(), "UP");
-        twist_msg->twist.linear.x = 1.0;
+        twist_msg->twist.linear.x = 0.1;
         publish_twist = true;
         break;
       case KEYCODE_DOWN:
         RCLCPP_DEBUG(nh_->get_logger(), "DOWN");
-        twist_msg->twist.linear.x = -1.0;
+        twist_msg->twist.linear.x = -0.1;
         publish_twist = true;
         break;
       case KEYCODE_PERIOD:
         RCLCPP_DEBUG(nh_->get_logger(), "PERIOD");
-        twist_msg->twist.linear.z = -1.0;
+        twist_msg->twist.linear.z = -0.1;
         publish_twist = true;
         break;
       case KEYCODE_SEMICOLON:
         RCLCPP_DEBUG(nh_->get_logger(), "SEMICOLON");
-        twist_msg->twist.linear.z = 1.0;
+        twist_msg->twist.linear.z = 0.1;
         publish_twist = true;
         break;
       case KEYCODE_E:
@@ -243,44 +250,37 @@ int KeyboardServo::keyLoop()
         break;
       case KEYCODE_1:
         RCLCPP_DEBUG(nh_->get_logger(), "1");
-        joint_msg->joint_names.push_back("panda_joint1");
-        joint_msg->velocities.push_back(joint_vel_cmd_);
+        joint_msg->velocities[0] = joint_vel_cmd_;
         publish_joint = true;
         break;
       case KEYCODE_2:
         RCLCPP_DEBUG(nh_->get_logger(), "2");
-        joint_msg->joint_names.push_back("panda_joint2");
-        joint_msg->velocities.push_back(joint_vel_cmd_);
+        joint_msg->velocities[1] = joint_vel_cmd_;
         publish_joint = true;
         break;
       case KEYCODE_3:
         RCLCPP_DEBUG(nh_->get_logger(), "3");
-        joint_msg->joint_names.push_back("panda_joint3");
-        joint_msg->velocities.push_back(joint_vel_cmd_);
+        joint_msg->velocities[2] = joint_vel_cmd_;
         publish_joint = true;
         break;
       case KEYCODE_4:
         RCLCPP_DEBUG(nh_->get_logger(), "4");
-        joint_msg->joint_names.push_back("panda_joint4");
-        joint_msg->velocities.push_back(joint_vel_cmd_);
+        joint_msg->velocities[3] = joint_vel_cmd_;
         publish_joint = true;
         break;
       case KEYCODE_5:
         RCLCPP_DEBUG(nh_->get_logger(), "5");
-        joint_msg->joint_names.push_back("panda_joint5");
-        joint_msg->velocities.push_back(joint_vel_cmd_);
+        joint_msg->velocities[4] = joint_vel_cmd_;
         publish_joint = true;
         break;
       case KEYCODE_6:
         RCLCPP_DEBUG(nh_->get_logger(), "6");
-        joint_msg->joint_names.push_back("panda_joint6");
-        joint_msg->velocities.push_back(joint_vel_cmd_);
+        joint_msg->velocities[5] = joint_vel_cmd_;
         publish_joint = true;
         break;
       case KEYCODE_7:
         RCLCPP_DEBUG(nh_->get_logger(), "7");
-        joint_msg->joint_names.push_back("panda_joint7");
-        joint_msg->velocities.push_back(joint_vel_cmd_);
+        joint_msg->velocities[6] = joint_vel_cmd_;
         publish_joint = true;
         break;
       case KEYCODE_R:
