@@ -1,10 +1,10 @@
-add_executable(servo_door_opening_demo src/servo_door_opening_demo.cpp)
-target_include_directories(servo_door_opening_demo PUBLIC include)
-ament_target_dependencies(servo_door_opening_demo  ${THIS_PACKAGE_INCLUDE_DEPENDS})
+add_executable(door_tutorial src/door_tutorial.cpp)
+target_include_directories(door_tutorial PUBLIC include)
+ament_target_dependencies(door_tutorial  ${THIS_PACKAGE_INCLUDE_DEPENDS})
 
 install(
   TARGETS
-    servo_door_opening_demo
+  door_tutorial
   DESTINATION
     lib/${PROJECT_NAME}
 )
