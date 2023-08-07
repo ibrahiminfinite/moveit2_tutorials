@@ -55,7 +55,7 @@ using namespace moveit_servo;
 //                             const std::string& planning_frame)
 // {
 //   auto pose_command_msg = convertIsometryToTransform(pose_command.pose, planning_frame, pose_command.frame_id);
-//   auto command_to_planning_frame = transform_buffer.lookupTransform(pose_command.frame_id, planning_frame, 
+//   auto command_to_planning_frame = transform_buffer.lookupTransform(pose_command.frame_id, planning_frame,
 //                                                                     rclcpp::Time(0), rclcpp::Duration::from_seconds(2));
 
 //   tf2::doTransform(pose_command_msg, pose_command_msg, command_to_planning_frame);
@@ -87,7 +87,7 @@ void moveToPose(Servo& servo, const PoseCommand& target_pose,
     pose_achieved = servo.getEndEffectorPose().isApprox(target_pose.pose, servo_params.pose_tracking.linear_tolerance);
 
     joint_state = servo.getNextJointState(target_pose);
-    std::cout<<servo.getStatusMessage()<<std::endl;
+    std::cout << servo.getStatusMessage() << std::endl;
     if (servo.getStatus() != StatusCode::INVALID)
       trajectory_pub->publish(composeTrajectoryMessage(servo_params, joint_state));
     tracking_rate.sleep();
@@ -112,7 +112,7 @@ void applyTwist(Servo& servo, const TwistCommand& target_twist,
 
     auto current_time = std::chrono::steady_clock::now();
     time_elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time);
-    
+
     if (servo.getStatus() != StatusCode::INVALID)
     {
       trajectory_pub->publish(composeTrajectoryMessage(servo_params, joint_state));
@@ -163,22 +163,21 @@ int main(int argc, char* argv[])
   door_knob_pose.pose.translate(Eigen::Vector3d(0.6, 0.0, 0.6));
   // door_knob_pose.pose.rotate(servo.getEndEffectorPose().linear());
   door_knob_pose.pose.rotate(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
-  door_knob_pose.pose.rotate(Eigen::AngleAxisd(M_PI/4, Eigen::Vector3d::UnitY()));
-  
+  door_knob_pose.pose.rotate(Eigen::AngleAxisd(M_PI / 4, Eigen::Vector3d::UnitY()));
 
   // door_knob_pose = servo.toPlanningFrame(door_knob_pose);
 
   moveToPose(servo, door_knob_pose, trajectory_pub);
 
-// servo.setCommandType(CommandType::TWIST);
+  // servo.setCommandType(CommandType::TWIST);
 
-//   TwistCommand target_twist{ servo_params.planning_frame, { 0.1, 0.0, 0.0, 0.0, 0.0, 0.0 } };
-// //   target_twist = toPlanningFrame(target_twist, transform_buffer, servo_params.planning_frame);
-//   applyTwist(servo, target_twist, trajectory_pub);
-//   target_twist = TwistCommand{ servo_params.planning_frame, { 0.0, 0.0, 0.0, 0.0, 1.0, 0.0 } };
-//   applyTwist(servo, target_twist, trajectory_pub);
-//   target_twist = TwistCommand{ servo_params.planning_frame, { 0.0, 0.0, 0.0, 0.0, 0.0, 0.5 } };
-//   applyTwist(servo, target_twist, trajectory_pub);
+  //   TwistCommand target_twist{ servo_params.planning_frame, { 0.1, 0.0, 0.0, 0.0, 0.0, 0.0 } };
+  // //   target_twist = toPlanningFrame(target_twist, transform_buffer, servo_params.planning_frame);
+  //   applyTwist(servo, target_twist, trajectory_pub);
+  //   target_twist = TwistCommand{ servo_params.planning_frame, { 0.0, 0.0, 0.0, 0.0, 1.0, 0.0 } };
+  //   applyTwist(servo, target_twist, trajectory_pub);
+  //   target_twist = TwistCommand{ servo_params.planning_frame, { 0.0, 0.0, 0.0, 0.0, 0.0, 0.5 } };
+  //   applyTwist(servo, target_twist, trajectory_pub);
 
   return 0;
 }

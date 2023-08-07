@@ -136,7 +136,7 @@ def generate_launch_description():
         package="moveit2_tutorials",
         executable="door_tutorial",
         name="door_tutorial",
-        output="screen"
+        output="screen",
     )
 
     return launch.LaunchDescription(
@@ -147,6 +147,6 @@ def generate_launch_description():
             panda_arm_controller_spawner,
             servo_node,
             container,
-            launch.actions.TimerAction(period=10.0, actions=[demo_node])
+            launch.actions.TimerAction(period=10.0, actions=[demo_node]),
         ]
     )
