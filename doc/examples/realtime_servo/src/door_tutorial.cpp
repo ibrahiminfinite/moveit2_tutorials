@@ -88,6 +88,8 @@ int main(int argc, char* argv[])
   rclcpp::Node::SharedPtr node = std::make_shared<rclcpp::Node>("servo_tutorial");
   auto marker_publisher =
       node->create_publisher<visualization_msgs::msg::MarkerArray>("/path_markers", rclcpp::SystemDefaultsQoS());
+  auto pose_publisher = node->create_publisher<geometry_msgs::msg::PoseStamped>("/servo_node/pose_target_cmds",
+                                                                                rclcpp::SystemDefaultsQoS());
 
   int id = 0;
   auto get_marker = [&](const Eigen::Vector3d& position, const std::string& frame) {
@@ -134,15 +136,46 @@ int main(int argc, char* argv[])
   }
   marker_publisher->publish(marray);
 
-  double door_start = M_PI / 2;
   Door door(node);
-  door.rotateDoor(door_start);
+  door.rotateDoor(M_PI / 2);
 
-  while (door_start < M_PI)
+  auto ee_pose = Eigen::Isometry3d::Identity();
+  ee_pose.rotate(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
+  ee_pose.translate(Eigen::Vector3d(0.3, 0.0, 0.4));
+
+  geometry_msgs::msg::PoseStamped target_pose;
+  target_pose.header.frame_id = "panda_link0";
+  auto rotation = Eigen::Quaterniond(ee_pose.rotation());
+  target_pose.pose.orientation.w = rotation.w();
+  target_pose.pose.orientation.x = rotation.x();
+  target_pose.pose.orientation.y = rotation.y();
+  target_pose.pose.orientation.z = rotation.z();
+  target_pose.pose.position.z = 0.4;
+
+  size_t i = traj.size() - 1;
+  while (i > 0)
   {
-    door.rotateDoor(door_start);
-    door_start += step;
-    rclcpp::sleep_for(std::chrono::milliseconds(500));
+    target_pose.pose.position.x = traj[i].x();
+    target_pose.pose.position.y = traj[i].y();
+    target_pose.header.stamp = node->now();
+    pose_publisher->publish(target_pose);
+    rclcpp::sleep_for(std::chrono::milliseconds(200));
+    i--;
+  }
+
+  double door_angle = M_PI / 2;
+  i = 0;
+  while (i < traj.size())
+  {
+    ee_pose.rotate(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
+    target_pose.pose.position.x = traj[i].x();
+    target_pose.pose.position.y = traj[i].y();
+    target_pose.header.stamp = node->now();
+    pose_publisher->publish(target_pose);
+    rclcpp::sleep_for(std::chrono::milliseconds(200));
+    door.rotateDoor(door_angle);
+    door_angle += step;
+    i++;
   }
 
   rclcpp::spin(node);
