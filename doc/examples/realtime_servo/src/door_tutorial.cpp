@@ -82,6 +82,64 @@ private:
   shape_msgs::msg::SolidPrimitive door_primitive_;
 };
 
+std::vector<Eigen::Vector3d> getPath()
+{
+  const double start_angle = M_PI / 2 + (M_PI / 8);
+  const double end_angle = M_PI;
+  const double step = 0.01745329;
+  std::vector<Eigen::Vector3d> traj;
+
+  for (double i = start_angle; i < end_angle; i = i + step)
+  {
+    double x = 0.8 + (0.5 * cos(i));
+    double y = 0.0 + (0.5 * sin(i));
+    auto vec = Eigen::Vector3d(x, y, 0.4);
+    traj.push_back(vec);
+  }
+  return traj;
+}
+
+visualization_msgs::msg::Marker getMarker(int id, const Eigen::Vector3d& position, const std::string& frame)
+{
+  visualization_msgs::msg::Marker marker;
+  marker.header.frame_id = frame;
+  marker.header.stamp = rclcpp::Time(0.0);
+  marker.id = id;
+  marker.type = visualization_msgs::msg::Marker::SPHERE;
+  marker.action = visualization_msgs::msg::Marker::ADD;
+  marker.pose.position.x = position.x();
+  marker.pose.position.y = position.y();
+  marker.pose.position.z = position.z();
+  marker.pose.orientation.x = 0.0;
+  marker.pose.orientation.y = 0.0;
+  marker.pose.orientation.z = 0.0;
+  marker.pose.orientation.w = 1.0;
+  marker.scale.x = 0.01;
+  marker.scale.y = 0.01;
+  marker.scale.z = 0.01;
+  marker.color.a = 1.0;
+  marker.color.r = 0.0;
+  marker.color.g = 1.0;
+  marker.color.b = 0.0;
+  id++;
+  return marker;
+}
+
+geometry_msgs::msg::PoseStamped getPose(const Eigen::Vector3d& position, const Eigen::Quaterniond& rotation)
+{
+  geometry_msgs::msg::PoseStamped target_pose;
+  target_pose.header.frame_id = "panda_link0";
+  target_pose.pose.orientation.w = rotation.w();
+  target_pose.pose.orientation.x = rotation.x();
+  target_pose.pose.orientation.y = rotation.y();
+  target_pose.pose.orientation.z = rotation.z();
+  target_pose.pose.position.x = position.x();
+  target_pose.pose.position.y = position.y();
+  target_pose.pose.position.z = position.z();
+
+  return target_pose;
+}
+
 int main(int argc, char* argv[])
 {
   rclcpp::init(argc, argv);
@@ -97,51 +155,19 @@ int main(int argc, char* argv[])
   auto executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   executor->add_node(node);
 
+  // Spin the node.
   std::thread executor_thread([&]() { executor->spin(); });
 
-  int id = 0;
-  auto get_marker = [&](const Eigen::Vector3d& position, const std::string& frame) {
-    visualization_msgs::msg::Marker marker;
-    marker.header.frame_id = frame;
-    marker.header.stamp = rclcpp::Time(0.0);
-    marker.id = id;
-    marker.type = visualization_msgs::msg::Marker::SPHERE;
-    marker.action = visualization_msgs::msg::Marker::ADD;
-    marker.pose.position.x = position.x();
-    marker.pose.position.y = position.y();
-    marker.pose.position.z = position.z();
-    marker.pose.orientation.x = 0.0;
-    marker.pose.orientation.y = 0.0;
-    marker.pose.orientation.z = 0.0;
-    marker.pose.orientation.w = 1.0;
-    marker.scale.x = 0.01;
-    marker.scale.y = 0.01;
-    marker.scale.z = 0.01;
-    marker.color.a = 1.0;
-    marker.color.r = 0.0;
-    marker.color.g = 1.0;
-    marker.color.b = 0.0;
-    id++;
-    return marker;
-  };
-
-  double start_angle = M_PI / 2 + (M_PI / 8);
-  double end_angle = M_PI;
-  double step = 0.01745329;
-
   visualization_msgs::msg::MarkerArray marray;
-  std::vector<Eigen::Vector3d> traj;
+  std::vector<Eigen::Vector3d> path = getPath();
 
-  for (double i = start_angle; i < end_angle; i = i + step)
+  for (size_t i = 0; i < path.size(); i++)
   {
-    double x = 0.8 + (0.5 * cos(i));
-    double y = 0.0 + (0.5 * sin(i));
-    auto vec = Eigen::Vector3d(x, y, 0.4);
-    traj.push_back(vec);
-    marray.markers.push_back(get_marker(vec, "panda_link0"));
+    marray.markers.push_back(getMarker(i, path[i], "panda_link0"));
   }
   marker_publisher->publish(marray);
 
+  // Create the door.
   Door door(node);
   door.rotateDoor(M_PI / 2);
 
@@ -151,29 +177,8 @@ int main(int argc, char* argv[])
   ee_pose.translate(Eigen::Vector3d(0.3, 0.0, 0.4));
 
   // Create the ROS message.
-  geometry_msgs::msg::PoseStamped target_pose;
-  target_pose.header.frame_id = "panda_link0";
-  auto rotation = Eigen::Quaterniond(ee_pose.rotation());
-  target_pose.pose.orientation.w = rotation.w();
-  target_pose.pose.orientation.x = rotation.x();
-  target_pose.pose.orientation.y = rotation.y();
-  target_pose.pose.orientation.z = rotation.z();
-  target_pose.pose.position.z = 0.4;
-
-  while (!switch_input_client->service_is_ready())
-  {
-    if (!rclcpp::ok())
-    {
-      RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
-      std::exit(EXIT_FAILURE);
-    }
-
-    rclcpp::sleep_for(std::chrono::milliseconds(500));
-  }
-  RCLCPP_INFO(node->get_logger(), "SERVICE READY");
-
   auto request = std::make_shared<moveit_msgs::srv::ServoCommandType::Request>();
-  request->command_type = 2;
+  request->command_type = moveit_msgs::srv::ServoCommandType::Request::POSE;
   auto response = switch_input_client->async_send_request(request);
   if (response.get()->success)
   {
@@ -185,14 +190,14 @@ int main(int argc, char* argv[])
   }
 
   // Follow the trajectory
+
   const double publish_period = 0.15;
   rclcpp::WallRate rate(1 / publish_period);
 
-  size_t i = traj.size() - 1;
+  size_t i = path.size() - 1;
   while (i > 0)
   {
-    target_pose.pose.position.x = traj[i].x();
-    target_pose.pose.position.y = traj[i].y();
+    auto target_pose = getPose(path[i], Eigen::Quaterniond(ee_pose.rotation()));
     target_pose.header.stamp = node->now();
     pose_publisher->publish(target_pose);
     rate.sleep();
@@ -200,25 +205,16 @@ int main(int argc, char* argv[])
   }
 
   double door_angle = M_PI / 2;
-
+  const double step = 0.01745329;  // 1 degree in radian
   i = 0;
-  while (i < traj.size())
+  while (i < path.size())
   {
     ee_pose.rotate(Eigen::AngleAxisd(-step, Eigen::Vector3d::UnitZ()));
-    auto rotation = Eigen::Quaterniond(ee_pose.rotation());
-    target_pose.pose.orientation.w = rotation.w();
-    target_pose.pose.orientation.x = rotation.x();
-    target_pose.pose.orientation.y = rotation.y();
-    target_pose.pose.orientation.z = rotation.z();
-    target_pose.pose.position.x = traj[i].x();
-    target_pose.pose.position.y = traj[i].y();
+    auto target_pose = getPose(path[i], Eigen::Quaterniond(ee_pose.rotation()));
     target_pose.header.stamp = node->now();
     pose_publisher->publish(target_pose);
-
     rate.sleep();
-
     door.rotateDoor(door_angle);
-
     door_angle += step;
     i++;
   }
