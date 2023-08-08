@@ -86,10 +86,18 @@ int main(int argc, char* argv[])
 {
   rclcpp::init(argc, argv);
   rclcpp::Node::SharedPtr node = std::make_shared<rclcpp::Node>("servo_tutorial");
+
   auto marker_publisher =
       node->create_publisher<visualization_msgs::msg::MarkerArray>("/path_markers", rclcpp::SystemDefaultsQoS());
   auto pose_publisher = node->create_publisher<geometry_msgs::msg::PoseStamped>("/servo_node/pose_target_cmds",
                                                                                 rclcpp::SystemDefaultsQoS());
+
+  auto switch_input_client = node->create_client<moveit_msgs::srv::ServoCommandType>("/servo_node/switch_command_type");
+
+  auto executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+  executor->add_node(node);
+
+  std::thread executor_thread([&]() { executor->spin(); });
 
   int id = 0;
   auto get_marker = [&](const Eigen::Vector3d& position, const std::string& frame) {
@@ -109,7 +117,7 @@ int main(int argc, char* argv[])
     marker.scale.x = 0.01;
     marker.scale.y = 0.01;
     marker.scale.z = 0.01;
-    marker.color.a = 1.0;  // Don't forget to set the alpha!
+    marker.color.a = 1.0;
     marker.color.r = 0.0;
     marker.color.g = 1.0;
     marker.color.b = 0.0;
@@ -123,7 +131,6 @@ int main(int argc, char* argv[])
 
   visualization_msgs::msg::MarkerArray marray;
   std::vector<Eigen::Vector3d> traj;
-  std::vector<double> door_angles;
 
   for (double i = start_angle; i < end_angle; i = i + step)
   {
@@ -131,7 +138,6 @@ int main(int argc, char* argv[])
     double y = 0.0 + (0.5 * sin(i));
     auto vec = Eigen::Vector3d(x, y, 0.4);
     traj.push_back(vec);
-    door_angles.push_back(i);
     marray.markers.push_back(get_marker(vec, "panda_link0"));
   }
   marker_publisher->publish(marray);
@@ -139,10 +145,12 @@ int main(int argc, char* argv[])
   Door door(node);
   door.rotateDoor(M_PI / 2);
 
+  // Default end-effector pose of the Panda arm.
   auto ee_pose = Eigen::Isometry3d::Identity();
   ee_pose.rotate(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
   ee_pose.translate(Eigen::Vector3d(0.3, 0.0, 0.4));
 
+  // Create the ROS message.
   geometry_msgs::msg::PoseStamped target_pose;
   target_pose.header.frame_id = "panda_link0";
   auto rotation = Eigen::Quaterniond(ee_pose.rotation());
@@ -152,6 +160,34 @@ int main(int argc, char* argv[])
   target_pose.pose.orientation.z = rotation.z();
   target_pose.pose.position.z = 0.4;
 
+  while (!switch_input_client->service_is_ready())
+  {
+    if (!rclcpp::ok())
+    {
+      RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
+      std::exit(EXIT_FAILURE);
+    }
+
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
+  }
+  RCLCPP_INFO(node->get_logger(), "SERVICE READY");
+
+  auto request = std::make_shared<moveit_msgs::srv::ServoCommandType::Request>();
+  request->command_type = 2;
+  auto response = switch_input_client->async_send_request(request);
+  if (response.get()->success)
+  {
+    RCLCPP_INFO_STREAM(node->get_logger(), "Switched to input type: Pose");
+  }
+  else
+  {
+    RCLCPP_WARN_STREAM(node->get_logger(), "Could not switch input to: Pose");
+  }
+
+  // Follow the trajectory
+  const double publish_period = 0.15;
+  rclcpp::WallRate rate(1 / publish_period);
+
   size_t i = traj.size() - 1;
   while (i > 0)
   {
@@ -159,25 +195,38 @@ int main(int argc, char* argv[])
     target_pose.pose.position.y = traj[i].y();
     target_pose.header.stamp = node->now();
     pose_publisher->publish(target_pose);
-    rclcpp::sleep_for(std::chrono::milliseconds(200));
+    rate.sleep();
     i--;
   }
 
   double door_angle = M_PI / 2;
+
   i = 0;
   while (i < traj.size())
   {
-    ee_pose.rotate(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
+    ee_pose.rotate(Eigen::AngleAxisd(-step, Eigen::Vector3d::UnitZ()));
+    auto rotation = Eigen::Quaterniond(ee_pose.rotation());
+    target_pose.pose.orientation.w = rotation.w();
+    target_pose.pose.orientation.x = rotation.x();
+    target_pose.pose.orientation.y = rotation.y();
+    target_pose.pose.orientation.z = rotation.z();
     target_pose.pose.position.x = traj[i].x();
     target_pose.pose.position.y = traj[i].y();
     target_pose.header.stamp = node->now();
     pose_publisher->publish(target_pose);
-    rclcpp::sleep_for(std::chrono::milliseconds(200));
+
+    rate.sleep();
+
     door.rotateDoor(door_angle);
+
     door_angle += step;
     i++;
   }
 
-  rclcpp::spin(node);
+  executor->cancel();
+  if (executor_thread.joinable())
+  {
+    executor_thread.join();
+  }
   rclcpp::shutdown();
 }
